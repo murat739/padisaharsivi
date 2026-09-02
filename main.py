@@ -1,19 +1,3 @@
-"""
-PROJE AMACI VE İNOVASYON YÖNÜ:
---------------------------------------------------------------------------------
-1. Hedef ve Amaç: Padişah Arşivi Pro; 36 Osmanlı padişahının yaşamını, icraatlarını,
-   felsefi sözlerini, saltanat sürelerini ve 50 adet güvenilir tarih soru-cevap 
-   havuzunu dijital ortamda inceleyen ve analiz eden profesyonel bir ansiklopedik veri motorudur.
-2. Çözülen Operasyonel Problem: Dağınık tarihsel verilerin tek bir çatı altında 
-   toplanmasını, istatistiksel karşılaştırmaların yapılmasını ve manuel veri arama 
-   maliyetinin sıfırlanmasını sağlar.
-3. İnovatif ve Otomasyon Avantajı: 
-   - Sıfır Disk Maliyeti (In-Memory / RAM Tabanlı İşlem)
-   - BytesIO Bellek Akışı ile Raporlama
-   - Thread-Safe Ziyaretçi Sayacı
-   - Kapsamlı XSS Süzgeci ve Enjeksiyon Koruması.
-"""
-
 import streamlit as st
 import pandas as pd
 import io
@@ -175,7 +159,6 @@ guvenilir_50_soru_db = [
     {"id": 49, "kategori": "Dağılma", "soru": "Trablusgarp Savaşı hangi antlaşma ile sona ermiş ve Kuzey Afrika'daki son toprak parçası kaybedilmiştir?", "cevap": "Uşi Antlaşması (1912)"},
     {"id": 50, "kategori": "Dağılma", "soru": "Osmanlı İmparatorluğu'nu resmen sona erdiren antlaşma hangisidir?", "cevap": "Lozan Barış Antlaşması (1923)"}
 ]
-
 # Kenar Çubuğu Navigasyon
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/ottoman-empire.png", width=65)
@@ -307,8 +290,8 @@ elif "3." in secim:
     st.markdown(f'<div class="legal-box"><b>Yasal Uyarı:</b> {HUKUKI_METIN}</div>', unsafe_allow_html=True)
 
 elif "4." in secim:
-    st.title("📚 50 Güvenilir Tarih Soru-Cevap Bankası")
-    st.write("Osmanlı tarihi boyunca gerçekleşen kritik olayları, antlaşmaları ve teşkilatları kapsayan 50 adet soru ve interaktif test motoru.")
+    st.title("📚 50 Güvenilir Tarih Soru-Cevap Bankası & Test Sınavı")
+    st.write("Osmanlı tarihi boyunca gerçekleşen kritik olayları, antlaşmaları ve teşkilatları kapsayan 4 şıklı çoktan seçmeli test motoru.")
     
     kategori_filtre = st.selectbox(
         "Kategoriye Göre Filtrele:",
@@ -318,6 +301,9 @@ elif "4." in secim:
     q_arama = st.text_input("Soru veya Konu İçinde Ara:")
     temiz_q_arama = xss_veri_suzgeci(q_arama)
     
+    # 4 şıklı test seçenekleri üretmek için yardımcı fonksiyon
+    import random
+    
     for item in guvenilir_50_soru_db:
         if kategori_filtre != "Tümü" and item["kategori"] != kategori_filtre:
             continue
@@ -325,10 +311,25 @@ elif "4." in secim:
             continue
             
         qid = item['id']
-        cevap_key = f"goster_cevap_{qid}"
-        if cevap_key not in st.session_state:
-            st.session_state[cevap_key] = False
+        secenek_key = f"secenekler_{qid}"
+        
+        # Her soru için 4 şıkkı (1 doğru, 3 yanlış) sabitleyelim
+        if secenek_key not in st.session_state:
+            dogru_cevap = item['cevap']
+            # Diğer sorulardan rastgele 3 yanlış cevap seçelim
+            yanlis_adaylari = [q['cevap'] for q in guvenilir_50_soru_db if q['cevap'] != dogru_cevap]
+            secilen_yanlislar = random.sample(yanlis_adaylari, min(3, len(yanlis_adaylari)))
+            
+            tum_siklar = secilen_yanlislar + [dogru_cevap]
+            random.shuffle(tum_siklar)
+            st.session_state[secenek_key] = {
+                "siklar": tum_siklar,
+                "dogru": dogru_cevap
+            }
 
+        veri = st.session_state[secenek_key]
+        harfler = ["A", "B", "C", "D"]
+        
         st.markdown(f"""
         <div class="soru-kutu">
             <span style="background-color: #5c1d1d; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em;">{xss_veri_suzgeci(item['kategori'])}</span>
@@ -336,19 +337,35 @@ elif "4." in secim:
         </div>
         """, unsafe_allow_html=True)
         
-        col_btn, col_empty = st.columns([1, 3])
-        with col_btn:
-            if st.button("Cevabı Göster", key=f"btn_{qid}"):
-                st.session_state[cevap_key] = not st.session_state[cevap_key]
+        # Kullanıcı radyo buton seçimi
+        secim_key = f"user_choice_{qid}"
+        cevaplanmis_key = f"cevaplandi_{qid}"
+        
+        secilen_sik = st.radio(
+            f"Soru {qid} için şık seçiniz:",
+            options=range(len(veri["siklar"])),
+            format_func=lambda x: f"{harfler[x]}) {xss_veri_suzgeci(veri['siklar'][x])}",
+            key=secim_key,
+            index=None
+        )
+        
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("Cevabı Kontrol Et", key=f"kontrol_{qid}"):
+                st.session_state[cevaplanmis_key] = True
+                st.rerun()
                 
-        if st.session_state[cevap_key]:
-            st.markdown(f"""
-            <div style="background-color: #fcfbfa; padding: 12px; border-radius: 6px; border-left: 3px solid #d4af37; margin-bottom: 20px;">
-                <b>Cevap:</b> {xss_veri_suzgeci(item['cevap'])}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+        if st.session_state.get(cevaplanmis_key, False):
+            if secilen_sik is not None:
+                secilen_metin = veri["siklar"][secilen_sik]
+                if secilen_metin == veri["dogru"]:
+                    st.success("🎉 Tebrikler, doğru cevap!")
+                else:
+                    st.error(f"❌ Yanlış cevap! Doğru cevap: **{veri['dogru']}**")
+            else:
+                st.warning("⚠️ Lütfen önce bir şık seçiniz.")
+                
+        st.markdown("---")
         
     # 50 Soruyu İndirme Butonu
     q_output = io.BytesIO()
@@ -357,12 +374,11 @@ elif "4." in secim:
     q_output.seek(0)
     
     st.download_button(
-        label="📥 50 Soruluk Veritabanını Excel Olarak İndir (.xlsx)",
+        label="📥 50 Soruluk Test Veritabanını Excel Olarak İndir (.xlsx)",
         data=q_output.getvalue(),
-        file_name="osmanli_50_guvenilir_soru.xlsx",
+        file_name="osmanli_50_coktan_secmeli_soru.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
 # GLOBAL FOOTER DISCLAIMER
 st.markdown("---")
 st.markdown(f"""
